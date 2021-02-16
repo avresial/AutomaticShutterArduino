@@ -11,12 +11,15 @@ const int pResistor = A0;
 #define DirPin 2
 #define StepPin 7
 
-int PhotoResistorActualValue = 50;
-int PhotoResistorNightValue = 300;
-int PhotoResistorDayValue = 600;
+int PhotoResistorActualValue = 200;
+int PhotoResistorNightValue = 100;
+int PhotoResistorDayValue = 300;
 
 bool Dir = true;// if true clockwise
 bool MockServerBool = true;
+bool Testing = true;
+
+String MesageForSerialPort = "";
 
 struct Order {
   String Name;
@@ -31,33 +34,68 @@ void setup() {
   pinMode(DirPin, OUTPUT);
   pinMode(ButtonPin, INPUT);
   Serial.begin(9600);
+
+  sayHello();
+}
+
+void sayHello()
+{
+  Serial.println("");
+  Serial.println("HI!");
+  Serial.println("CoilPin - " + String(CoilPin));
+  Serial.println("ButtonPin - " + String(ButtonPin));
+  Serial.println("pResistor - " + String(pResistor));
+  Serial.println("");
+
+  Serial.println("DirPin - " + String(DirPin));
+  Serial.println("StepPin - " + String(StepPin));
+  Serial.println("");
+
+  Serial.println("PhotoResistorActualValue  - " + String(PhotoResistorActualValue));
+  Serial.println("PhotoResistorNightValue   - " + String(PhotoResistorNightValue));
+  Serial.println("PhotoResistorDayValue     - " + String( PhotoResistorDayValue));
+  Serial.println("");
+
+  Serial.println("AbsoluteSteps     - " + String(AbsoluteSteps));
+  Serial.println("");
+
+  Serial.println("Testing - " + String(Testing));
+  Serial.println("");
 }
 
 void loop() {
   Order newOrder = WhatToDo(CurrentOrder);
   CurrentOrder = newOrder;
 
-  //PhotoResistorActualValue = analogRead(pResistor);
+  GetPhotoResistorValue();//
 
   Do(CurrentOrder);
   CurrentOrder = {"Null", 0};
 
   if (PreviousAbsoluteSteps != AbsoluteSteps)
   {
-    Serial.println("AbsoluteSteps - " + String(AbsoluteSteps));
+    //Serial.println("AbsoluteSteps - " + String(AbsoluteSteps));
     PreviousAbsoluteSteps = AbsoluteSteps;
   }
-  if (PhotoResistorActualValue < 1)
-    PhotoResistorActualValue = PhotoResistorDayValue + 100;
-  PhotoResistorActualValue--;
-  //delay(10);
+
+  if (MesageForSerialPort != "")
+  {
+    if (Testing)
+      MesageForSerialPort += "Testing mode ON\n";
+    else
+      MesageForSerialPort += "\n\n";
+    Serial.print(MesageForSerialPort);
+    MesageForSerialPort = "";
+  }
 }
 
 // Move
 void OpenTo(int value)
 {
   int newRotation = value - AbsoluteSteps;
-  Serial.println("I'm opening to - " + String(newRotation));
+  MesageForSerialPort += "AbsoluteSteps    - " + String(AbsoluteSteps) + "\n";
+  MesageForSerialPort += "I'm opening to  - " + String(value) + " it is - " + String(newRotation) + " steps." + "\n";
+
   if (newRotation < 0)
   {
     RotateCounterClockwise( -1 * newRotation);
@@ -68,7 +106,10 @@ void OpenTo(int value)
 }
 void RotateClockwise(int amountOfSteps)
 {
-  Serial.println("Going Clockwise " + String(amountOfSteps) + " steps.");
+
+  MesageForSerialPort += "Going Clockwise " + String(amountOfSteps) + " steps." + "\n";
+  //Serial.println("Going Clockwise " + String(amountOfSteps) + " steps.");
+
   digitalWrite(DirPin, LOW);
   for (int i = 0; i < amountOfSteps; i++)
     MakeOneStep();
@@ -77,7 +118,8 @@ void RotateClockwise(int amountOfSteps)
 
 void RotateCounterClockwise(int amountOfSteps)
 {
-  Serial.println("Going counter clockwise " + String(amountOfSteps) + " steps.");
+  MesageForSerialPort += "Going counter clockwise " + String(amountOfSteps) + " steps." + "\n";
+  //Serial.println("Going counter clockwise " + String(amountOfSteps) + " steps.");
   digitalWrite(DirPin, HIGH);
   for (int i = 0; i < amountOfSteps; i++)
     MakeOneStep();
@@ -116,20 +158,20 @@ int CalculateDistanceToSteps(float distance)
 
   int steps = (int)((howManyFullRotations * 360) / AnglePerStep);
 
-  Serial.println("Distance - " + String(distance) + " is " + String(steps) + " - steps.");
+  MesageForSerialPort += "Distance - " + String(distance) + " is " + String(steps) + " - steps." + "\n";
+  //Serial.println("Distance - " + String(distance) + " is " + String(steps) + " - steps.");
   return steps;
 }
 
 //Logic
 Order WhatToDo(Order lastOrder)
 {
-  //Serial.println("PhotoResistorActualValue " + String(PhotoResistorActualValue));
+
   Order order;
   if (lastOrder.Name == "Null")
   {
     if (PhotoResistorActualValue < PhotoResistorNightValue && AbsoluteSteps != 100)
     {
-      
       order = {"OpenTo", 100};
       return order;
     }
@@ -142,7 +184,8 @@ Order WhatToDo(Order lastOrder)
     if (digitalRead(ButtonPin) == 1)
     {
       order = GetOrderFromServer();
-      Serial.println(order.Name + " " + String(order.Value) + " mm");
+      MesageForSerialPort += order.Name + " " + String(order.Value) + " mm" + "\n";
+      //Serial.println(order.Name + " " + String(order.Value) + " mm");
       return order;
     }
   }
@@ -169,20 +212,37 @@ void Do(Order order)
 {
   if (order.Name == "RotateColckwise")
   {
-    SwitchPowerTo(true);
+    if (!Testing)
+      SwitchPowerTo(true);
     RotateClockwise(CalculateDistanceToSteps(order.Value));
     SwitchPowerTo(false);
   }
   else if (order.Name == "RotateCounterColckwise")
   {
-    SwitchPowerTo(true);
+    if (!Testing)
+      SwitchPowerTo(true);
     RotateCounterClockwise(CalculateDistanceToSteps(order.Value));
     SwitchPowerTo(false);
   } else if (order.Name == "OpenTo")
   {
-    SwitchPowerTo(true);
+    if (!Testing)
+      SwitchPowerTo(true);
     OpenTo(order.Value);
     SwitchPowerTo(false);
   }
   SwitchPowerTo(false);
+}
+
+//photoresistor
+void GetPhotoResistorValue()
+{
+  if (Testing) {
+    if (PhotoResistorActualValue < 1)
+      PhotoResistorActualValue = PhotoResistorDayValue + 100;
+    PhotoResistorActualValue--;
+  } else
+  {
+    PhotoResistorActualValue = analogRead(pResistor);
+  }
+
 }
