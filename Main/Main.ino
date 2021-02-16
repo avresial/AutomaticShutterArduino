@@ -4,11 +4,26 @@
 int CoilPin = 12;
 int ButtonPin = 8;
 
+int AbsoluteSteps = 0; // tells how many steps was made from position 0, + means clockwise, - means counterClockwise
+int PreviousAbsoluteSteps = 0;
+
+const int pResistor = A0;
 #define DirPin 2
 #define StepPin 7
-#define stepsPerRevolution 400
+
+int PhotoResistorActualValue = 50;
+int PhotoResistorNightValue = 300;
+int PhotoResistorDayValue = 600;
 
 bool Dir = true;// if true clockwise
+bool MockServerBool = true;
+
+struct Order {
+  String Name;
+  int Value;
+};
+
+Order CurrentOrder = {"Null", 0};
 
 void setup() {
   pinMode(CoilPin, OUTPUT);
@@ -16,47 +31,57 @@ void setup() {
   pinMode(DirPin, OUTPUT);
   pinMode(ButtonPin, INPUT);
   Serial.begin(9600);
-
 }
 
 void loop() {
+  Order newOrder = WhatToDo(CurrentOrder);
+  CurrentOrder = newOrder;
 
-  if (digitalRead(ButtonPin) == 1)
-  {
-    SwitchPowerTo(true);
-    int HowFar = 40;// mm
-    int testLaps = 1;
-    for (int j = 0; j < testLaps; j++)
-    {
-      RotateCounterClockwise(CalculateDistanceToSteps(HowFar));
-      delay(1000);
-      RotateClockwise(CalculateDistanceToSteps(HowFar));
-      delay(1000);
-    }
-  }
-  else
-  {
-    SwitchPowerTo(false);
-  }
+  //PhotoResistorActualValue = analogRead(pResistor);
 
-  delay(100);
+  Do(CurrentOrder);
+  CurrentOrder = {"Null", 0};
+
+  if (PreviousAbsoluteSteps != AbsoluteSteps)
+  {
+    Serial.println("AbsoluteSteps - " + String(AbsoluteSteps));
+    PreviousAbsoluteSteps = AbsoluteSteps;
+  }
+  if (PhotoResistorActualValue < 1)
+    PhotoResistorActualValue = PhotoResistorDayValue + 100;
+  PhotoResistorActualValue--;
+  //delay(10);
 }
 
 // Move
-void RotateClockwise(int amount)
+void OpenTo(int value)
 {
-  Serial.println("Going Clockwise " + String(amount) + " steps.");
+  int newRotation = value - AbsoluteSteps;
+  Serial.println("I'm opening to - " + String(newRotation));
+  if (newRotation < 0)
+  {
+    RotateCounterClockwise( -1 * newRotation);
+  } else
+  {
+    RotateClockwise(newRotation);
+  }
+}
+void RotateClockwise(int amountOfSteps)
+{
+  Serial.println("Going Clockwise " + String(amountOfSteps) + " steps.");
   digitalWrite(DirPin, LOW);
-  for (int i = 0; i < amount; i++)
+  for (int i = 0; i < amountOfSteps; i++)
     MakeOneStep();
+  AbsoluteSteps += amountOfSteps;
 }
 
-void RotateCounterClockwise(int amount)
+void RotateCounterClockwise(int amountOfSteps)
 {
-  Serial.println("Going counter clockwise " + String(amount) + " steps.");
+  Serial.println("Going counter clockwise " + String(amountOfSteps) + " steps.");
   digitalWrite(DirPin, HIGH);
-  for (int i = 0; i < amount; i++)
+  for (int i = 0; i < amountOfSteps; i++)
     MakeOneStep();
+  AbsoluteSteps -= amountOfSteps;
 }
 
 void MakeOneStep()
@@ -80,7 +105,6 @@ void SwitchPowerTo(bool state)
       digitalWrite(CoilPin, LOW);
       delay(100);
       break;
-
   }
 }
 
@@ -94,4 +118,71 @@ int CalculateDistanceToSteps(float distance)
 
   Serial.println("Distance - " + String(distance) + " is " + String(steps) + " - steps.");
   return steps;
+}
+
+//Logic
+Order WhatToDo(Order lastOrder)
+{
+  //Serial.println("PhotoResistorActualValue " + String(PhotoResistorActualValue));
+  Order order;
+  if (lastOrder.Name == "Null")
+  {
+    if (PhotoResistorActualValue < PhotoResistorNightValue && AbsoluteSteps != 100)
+    {
+      
+      order = {"OpenTo", 100};
+      return order;
+    }
+
+    if (PhotoResistorActualValue > PhotoResistorDayValue && AbsoluteSteps != 0)
+    {
+      order = {"OpenTo", 0};
+      return order;
+    }
+    if (digitalRead(ButtonPin) == 1)
+    {
+      order = GetOrderFromServer();
+      Serial.println(order.Name + " " + String(order.Value) + " mm");
+      return order;
+    }
+  }
+  return lastOrder;
+}
+
+Order GetOrderFromServer()
+{
+  Order order;
+  if (MockServerBool)
+  {
+    order = {"RotateColckwise", 100};
+    MockServerBool = false;
+  } else
+  {
+    order = {"RotateCounterColckwise", 100};
+    MockServerBool = true;
+  }
+
+  return order;
+}
+
+void Do(Order order)
+{
+  if (order.Name == "RotateColckwise")
+  {
+    SwitchPowerTo(true);
+    RotateClockwise(CalculateDistanceToSteps(order.Value));
+    SwitchPowerTo(false);
+  }
+  else if (order.Name == "RotateCounterColckwise")
+  {
+    SwitchPowerTo(true);
+    RotateCounterClockwise(CalculateDistanceToSteps(order.Value));
+    SwitchPowerTo(false);
+  } else if (order.Name == "OpenTo")
+  {
+    SwitchPowerTo(true);
+    OpenTo(order.Value);
+    SwitchPowerTo(false);
+  }
+  SwitchPowerTo(false);
 }
