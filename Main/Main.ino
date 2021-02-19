@@ -81,7 +81,7 @@ void loop() {
   if (MesageForSerialPort != "")
   {
     if (Testing)
-      MesageForSerialPort += "Testing mode ON\n";
+      MesageForSerialPort += "Testing mode ON\n\n";
     else
       MesageForSerialPort += "\n\n";
     Serial.print(MesageForSerialPort);
