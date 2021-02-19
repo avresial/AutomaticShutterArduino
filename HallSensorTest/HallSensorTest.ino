@@ -120,42 +120,46 @@ void moveEngineCounterClockwiseMock(int amount)
   HallIncrementation = 0;
 }
 
-
 void calibrateShutter()
 {
-  Serial.println("Calibraton!");
+  Serial.println("Calibraton time!");
 
   HallIncrementation = 0;
+  absolutePosition = 0;
   LastHallSignalAbsolutePosition = 0;
 
   int tolerance = 40;
 
   int FirstHallSignalPosition = 0;
   int SecondHallSignalPosition = 0;
+  int PotentialNewSignalPosition = 0;
 
-  absolutePosition = 0;
-
+  // Opening shutter loop
   for (int i = 0; i < (2 * StepsForFullCircle) + (StepsForFullCircle * 0.1); i++)
   {
     processMagneticSignals();
 
     if (i > StepsForFullCircle && HallIncrementation < 1 )
     {
-      Serial.println("\n\n!!!ABORT CALIBRATION!!!\n\n");
+      Serial.println("There was no signal from hall sensor for entire loop.\nShutter might be stuck");
+      Serial.println("!!!ABORT CALIBRATION!!!\n\n");
       safetyBrake = true;
       return;
     }
 
+
+
     if (HallIncrementation == 1 && FirstHallSignalPosition == 0 )
     {
       FirstHallSignalPosition = LastHallSignalAbsolutePosition;
-
+      PotentialNewSignalPosition = StepsForFullCircle + FirstHallSignalPosition;
       Serial.println("FirstHallSignalPosition - " + String(FirstHallSignalPosition));
-      Serial.println("Next signal expected to be between - " + String(StepsForFullCircle + FirstHallSignalPosition - tolerance) + " and " + String(StepsForFullCircle + FirstHallSignalPosition + tolerance));
+      Serial.println("Next signal expected to be between - " + String(PotentialNewSignalPosition - tolerance) + " and " + String(PotentialNewSignalPosition + tolerance));
     }
     else if (HallIncrementation == 2 && SecondHallSignalPosition == 0)
     {
-      if (StepsForFullCircle + FirstHallSignalPosition - tolerance < LastHallSignalAbsolutePosition &&  StepsForFullCircle + FirstHallSignalPosition + tolerance > LastHallSignalAbsolutePosition )
+      PotentialNewSignalPosition = StepsForFullCircle + FirstHallSignalPosition;
+      if (PotentialNewSignalPosition - tolerance < LastHallSignalAbsolutePosition &&  PotentialNewSignalPosition + tolerance > LastHallSignalAbsolutePosition )
       {
         SecondHallSignalPosition = LastHallSignalAbsolutePosition;
         Serial.println("SecondHallSignalPosition - " + String(LastHallSignalAbsolutePosition));
@@ -168,24 +172,22 @@ void calibrateShutter()
         return;
       }
     }
+
     if (absolutePosition % 5 == 0)
       Serial.println("absolutePosition - " + String(absolutePosition));
     absolutePosition++;
     delay(30);
   }
 
-
   HallIncrementation = 0;
   int PrevHallIncrementation = HallIncrementation;
-  bool ShutterIsClosed = false;
-  int PreviousLastHallSignalAbsolutePosition = 0;
-  int PotentialNewSignalPosition = 0;
-
   PotentialNewSignalPosition = LastHallSignalAbsolutePosition;
 
+  bool ShutterIsClosed = false;
+
+  // Closing shutter loop
   while (!ShutterIsClosed)
   {
-
     processMagneticSignals();
 
     if (PrevHallIncrementation != HallIncrementation)
@@ -202,7 +204,7 @@ void calibrateShutter()
 
           Serial.println("\n\n!!!CALIBRATION FINISHED!!!\n");
           Serial.println("\n!!!End of shutter reached!!!\n");
-          
+
           ShutterIsClosed = true;
           HallIncrementation = 0;
           absolutePositionContinueNegativeCounter = 0;
@@ -216,7 +218,6 @@ void calibrateShutter()
           delay(300);
           return;
         }
-
 
         Serial.println("\n\n!!!ABORT CALIBRATION!!!\n\n");
         safetyBrake = true;
@@ -232,7 +233,6 @@ void calibrateShutter()
       Serial.println("");
     }
 
-
     if (absolutePosition < PotentialNewSignalPosition - tolerance)
     { //no new signal on time, motor might be slipping :c
       Serial.println("\n\n!!! No new signal on time, motor might be slipping :c !!!");
@@ -240,8 +240,6 @@ void calibrateShutter()
       safetyBrake = true;
       return;
     }
-
-
 
     if (PrevHallIncrementation != 0)
       PotentialNewSignalPosition = LastHallSignalAbsolutePosition - StepsForFullCircle;
@@ -253,18 +251,10 @@ void calibrateShutter()
 }
 
 
-
-
-
-
 void processMagneticSignals()
 {
-  /*
-    absolutePositionContinueNegativeCounter
-    absolutePositionContinuePositiveCounter
-    absolutePosition
-  */
   prevHall = Hall;
+
   if (digitalRead(hallReading) == LOW && !prevHall) {
     Hall = true;
   }
